@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tugas Komputer Grafika — #470 Leafeon (Three.js)</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --bg: #07110d;
+        --panel: rgba(11, 24, 19, 0.92);
+        --accent: #68d89b;
+        --accent-strong: #37b874;
+        --gold: #f1dca7;
+        --text: #ecfdf5;
+        --muted: #9cb8a9;
+        --card: rgba(16, 35, 28, 0.85);
+        --border: #234737;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        height: 100%;
+        margin: 0;
+        background: radial-gradient(1200px 700px at 35% -10%, #193b2d 0%, #07110d 65%);
+        color: var(--text);
+        font: 13.5px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      .page {
+        display: grid;
+        grid-template-columns: minmax(360px, 1.35fr) minmax(380px, 1fr);
+        gap: 16px;
+        padding: 16px;
+        height: 100%;
+      }
+      @media (max-width: 960px) {
+        .page { grid-template-columns: 1fr; height: auto; }
+        .viewer { height: 540px; }
+      }
+      .viewer {
+        position: relative;
+        background: linear-gradient(180deg, #0d231b, #07120e);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      }
+      #canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+      #canvas:active { cursor: grabbing; }
+      .hud-top {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+        z-index: 5;
+      }
+      .stats-bar { display: flex; gap: 8px; flex-wrap: wrap; }
+      .stat-chip {
+        background: rgba(8, 20, 15, 0.78);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(104, 216, 155, 0.28);
+        border-radius: 10px;
+        padding: 4px 10px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .stat-chip b { color: var(--accent); font-weight: 700; }
+      .inspector-badge {
+        background: rgba(12, 31, 23, 0.88);
+        backdrop-filter: blur(10px);
+        border: 1px solid var(--accent);
+        border-radius: 12px;
+        padding: 8px 12px;
+        max-width: 295px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+      .inspector-badge .part-title { font-weight: 700; color: var(--gold); font-size: 13px; }
+      .inspector-badge .part-meta { font-size: 11.5px; color: var(--text); margin-top: 2px; }
+      .panel {
+        overflow: auto;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+      }
+      .dex-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+      }
+      h1 { font-size: 22px; margin: 0; letter-spacing: 0.5px; color: var(--gold); }
+      .dex-num {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(104, 216, 155, 0.15);
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .sub { color: var(--muted); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 10px 0 14px;
+        background: var(--card);
+        padding: 10px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+      }
+      .thumb {
+        width: 88px;
+        height: 88px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 2px solid var(--accent);
+        object-fit: contain;
+        display: block;
+        padding: 4px;
+        flex-shrink: 0;
+      }
+      .meta { display: grid; grid-template-columns: 78px auto; gap: 5px 8px; font-size: 12.5px; }
+      .meta b { color: var(--accent); }
+
+      .pill {
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: #173d2c;
+        color: #84f5b5;
+        font-weight: 600;
+        font-size: 12px;
+        border: 1px solid #2d7052;
+      }
+      .filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 12px 0 10px;
+        align-items: center;
+      }
+      .filter-btn {
+        background: #10241c;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .filter-btn:hover { color: var(--text); border-color: var(--accent); }
+      .filter-btn.active {
+        background: var(--accent);
+        color: #061810;
+        border-color: var(--accent);
+        font-weight: 700;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 6px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      thead th {
+        position: sticky;
+        top: 0;
+        background: #0d221a;
+        color: var(--gold);
+        z-index: 2;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+      th, td {
+        border-bottom: 1px solid var(--border);
+        padding: 7px 9px;
+        text-align: left;
+        vertical-align: middle;
+        font-size: 12.5px;
+      }
+      tbody tr { cursor: pointer; transition: background 0.15s; }
+      tbody tr:hover { background: rgba(104, 216, 155, 0.12); }
+      tbody tr.active-row {
+        background: rgba(104, 216, 155, 0.26);
+        outline: 1px solid var(--accent);
+      }
+      tbody tr.hidden-row { display: none; }
+      .swatch {
+        display: inline-block;
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        margin-right: 5px;
+        vertical-align: middle;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+      .tag { color: var(--accent); font-weight: 600; }
+      .list { margin: 6px 0 0; padding-left: 20px; }
+      .muted { color: var(--muted); }
+      .controls-wrap {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+        z-index: 5;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        pointer-events: auto;
+        background: rgba(8, 20, 15, 0.82);
+        backdrop-filter: blur(10px);
+        padding: 8px 10px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+      }
+      .ctrl-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding-right: 6px;
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .ctrl-group:last-child { border-right: none; padding-right: 0; }
+      .ctrl-label { font-size: 11px; color: var(--muted); margin-right: 2px; font-weight: 600; }
+      .btn {
+        background: #132d23;
+        border: 1px solid #285944;
+        color: #e4fff0;
+        padding: 5px 9px;
+        border-radius: 8px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .btn:hover { background: #1d4435; border-color: var(--accent); }
+      .btn.active {
+        background: var(--accent-strong);
+        color: #04130b;
+        border-color: #9ef5c2;
+        font-weight: 700;
+      }
+      .slider-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: var(--gold);
+      }
+      .slider-inline input[type="range"] { width: 80px; accent-color: var(--accent); cursor: pointer; }
+      .foot { margin-top: 10px; color: var(--muted); font-size: 12px; }
+      code {
+        background: #0c1f17;
+        padding: 2px 6px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        color: var(--gold);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <!-- 3D VIEWER -->
+      <section class="viewer">
+        <canvas id="canvas"></canvas>
+
+        <!-- HUD Top: Real-time Stats & Selected Part Inspector -->
+        <div class="hud-top">
+          <div class="stats-bar">
+            <div class="stat-chip"><b id="fpsStat">60</b> FPS</div>
+            <div class="stat-chip"><b id="meshStat">0</b> Mesh</div>
+            <div class="stat-chip"><b id="triStat">0</b> Triangles</div>
+            <div class="stat-chip">Mood: <b id="moodStat">Forest Day</b></div>
+          </div>
+          <div class="inspector-badge" id="partInspector">
+            <div class="part-title" id="inspTitle">Klik / Hover Bagian 3D</div>
+            <div class="part-meta" id="inspMeta">
+              Pilih bagian pada model 3D atau klik baris tabel untuk inspeksi objek Quadric.
+            </div>
+          </div>
+        </div>
+
+        <!-- HUD Bottom: Interactive Toolbars -->
+        <div class="controls-wrap">
+          <div class="controls">
+            <div class="ctrl-group">
+              <span class="ctrl-label">Kamera:</span>
+              <button class="btn" id="resetCam">Reset</button>
+              <button class="btn cam-preset" data-cam="front">Depan</button>
+              <button class="btn cam-preset" data-cam="side">Samping</button>
+              <button class="btn cam-preset" data-cam="top">Atas</button>
+              <button class="btn cam-preset" data-cam="head">Wajah</button>
+            </div>
+            <div class="ctrl-group">
+              <span class="ctrl-label">Animasi:</span>
+              <button class="btn anim-btn active" data-anim="idle">Idle</button>
+              <button class="btn anim-btn" data-anim="walk">Jalan</button>
+              <button class="btn anim-btn" data-anim="attack">Leaf Storm</button>
+            </div>
+            <div class="ctrl-group">
+              <span class="ctrl-label">Cahaya:</span>
+              <button class="btn light-btn active" data-light="day">Siang</button>
+              <button class="btn light-btn" data-light="sunset">Sore</button>
+              <button class="btn light-btn" data-light="night">Malam</button>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="ctrl-group">
+              <button class="btn" id="toggleSpin">Auto-Rotate</button>
+              <button class="btn" id="toggleWire">Wireframe</button>
+              <button class="btn active" id="toggleEnv">Diorama Hutan</button>
+            </div>
+            <div class="ctrl-group">
+              <label class="slider-inline" title="Bongkar komponen Quadric">
+                <span>Explode:</span>
+                <input type="range" id="explodeSlider" min="0" max="1" step="0.02" value="0" />
+              </label>
+            </div>
+            <div class="ctrl-group">
+              <button class="btn" id="btnScreenshot">Screenshot PNG</button>
+              <label class="btn" for="imgFile">Muat Gambar 3D</label>
+              <input
+                type="file"
+                id="imgFile"
+                accept="image/*"
+                style="display: none"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SPEC PANEL / TABLE -->
+      <aside class="panel">
+        <div class="dex-header">
+          <h1>7. LEAFEON</h1>
+          <span class="dex-num">POKÉDEX #470</span>
+        </div>
+        <div class="sub">
+          <span>Type: <span class="pill">🌿 Grass</span></span>
+          <span>Kategori: <span class="pill">Verdant Pokémon</span></span>
+          <span class="muted">Konsep: Tanaman daun & diorama forest</span>
+        </div>
+        <div class="row">
+          <img class="thumb" src="GAMBAR.jpeg" alt="Referensi Leafeon (#470)" />
+          <div class="meta">
+            <b>Renderer</b><span>Three.js WebGL (Shadow + Fog + Particles)</span>
+            <b>Primitif</b><span>Sphere, Ellipsoid, Cylinder, Hyperboloid (1-Sheet), Curve</span>
+            <b>Interaksi</b><span>Raycasting 2-Arah (Klik 3D &harr; Tabel), Explode View, Filter</span>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <span class="ctrl-label">Filter Primitif:</span>
+          <button class="filter-btn active" data-filter="all">Semua</button>
+          <button class="filter-btn" data-filter="Sphere">Sphere</button>
+          <button class="filter-btn" data-filter="Ellipsoid">Ellipsoid</button>
+          <button class="filter-btn" data-filter="Cylinder">Cylinder</button>
+          <button class="filter-btn" data-filter="Hyperboloid">Hyperboloid</button>
+          <button class="filter-btn" data-filter="Curve">Curve</button>
+        </div>
+
+        <table id="specTable">
+          <thead>
+            <tr>
+              <th>Bagian</th>
+              <th>Bentuk Geometris</th>
+              <th>Deskripsi Detail</th>
+              <th>Warna</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-part="Kepala" data-primitive="Ellipsoid">
+              <td>Kepala</td>
+              <td>Ellipsoid</td>
+              <td>Kepala proporsional + pipi, panjang 16cm</td>
+              <td><span class="swatch" style="background:#f3dfb6"></span>Cream / Warm Tan</td>
+            </tr>
+            <tr data-part="Moncong" data-primitive="Ellipsoid">
+              <td>Moncong</td>
+              <td>Ellipsoid kecil</td>
+              <td>Moncong meruncing halus, panjang 4.5cm</td>
+              <td><span class="swatch" style="background:#f6e7c8"></span>Soft Cream</td>
+            </tr>
+            <tr data-part="Hidung" data-primitive="Ellipsoid">
+              <td>Hidung</td>
+              <td>Ellipsoid kecil</td>
+              <td>Hidung segitiga mungil, panjang 1.5cm</td>
+              <td><span class="swatch" style="background:#6d4527"></span>Coklat Tua</td>
+            </tr>
+            <tr data-part="Mata" data-primitive="Ellipsoid">
+              <td>Mata (2x)</td>
+              <td>Ellipsoid horizontal</td>
+              <td>Iris mata besar + sklera, lebar 5cm</td>
+              <td><span class="swatch" style="background:#9c5a25"></span>Amber Coklat</td>
+            </tr>
+            <tr data-part="Pupil" data-primitive="Sphere">
+              <td>Pupil (2x)</td>
+              <td>Sphere kecil</td>
+              <td>Pupil mata fokus, diameter 2cm</td>
+              <td><span class="swatch" style="background:#1c120c"></span>Hitam</td>
+            </tr>
+            <tr data-part="Highlight Mata" data-primitive="Sphere">
+              <td>Highlight Mata (2x)</td>
+              <td>Sphere kecil</td>
+              <td>Kilau pantulan cahaya, diameter 1cm</td>
+              <td><span class="swatch" style="background:#ffffff"></span>Putih</td>
+            </tr>
+            <tr data-part="Telinga Leaf" data-primitive="Ellipsoid">
+              <td>Telinga Leaf (2x)</td>
+              <td>Ellipsoid pipih</td>
+              <td>Telinga daun bertingkat + bagian dalam coklat, 18cm</td>
+              <td><span class="swatch" style="background:#5ec488"></span>Hijau Daun & Coklat</td>
+            </tr>
+            <tr data-part="Detail Telinga" data-primitive="Curve">
+              <td>Detail Telinga</td>
+              <td>Curve (Tube)</td>
+              <td>Tulang & urat daun di telinga (CatmullRomCurve3)</td>
+              <td><span class="swatch" style="background:#266b44"></span>Hijau Gelap</td>
+            </tr>
+            <tr data-part="Head Leaf" data-primitive="Ellipsoid">
+              <td>Head Leaf</td>
+              <td>Ellipsoid + Curve</td>
+              <td>Jambul daun melengkung khas di dahi, panjang 16cm</td>
+              <td><span class="swatch" style="background:#68d093"></span>Hijau Mint Daun</td>
+            </tr>
+            <tr data-part="Leher" data-primitive="Hyperboloid">
+              <td>Leher</td>
+              <td>Hyperboloid (1 sheet)</td>
+              <td>Leher silindris hiperbolik penyambung kepala-badan</td>
+              <td><span class="swatch" style="background:#ebd3a5"></span>Cream Tan</td>
+            </tr>
+            <tr data-part="Badan" data-primitive="Ellipsoid">
+              <td>Badan</td>
+              <td>Ellipsoid</td>
+              <td>Torso ramping berotot, panjang 32cm</td>
+              <td><span class="swatch" style="background:#ebd3a5"></span>Warm Cream / Tan</td>
+            </tr>
+            <tr data-part="Dada" data-primitive="Ellipsoid">
+              <td>Dada</td>
+              <td>Ellipsoid pipih</td>
+              <td>Dada depan + aksen kerah daun, lebar 16cm</td>
+              <td><span class="swatch" style="background:#f6e7c8"></span>Cream Terang</td>
+            </tr>
+            <tr data-part="Shoulder Leaves" data-primitive="Ellipsoid">
+              <td>Chest & Shoulder Leaves</td>
+              <td>Ellipsoid pipih</td>
+              <td>Tunas daun dada, leher belakang & bahu, panjang 10cm</td>
+              <td><span class="swatch" style="background:#5ec488"></span>Hijau Daun</td>
+            </tr>
+            <tr data-part="Kaki Depan" data-primitive="Cylinder">
+              <td>Kaki Depan (2x)</td>
+              <td>Cylinder</td>
+              <td>Tungkai depan + kaos kaki coklat, panjang 18cm, Ø 5cm</td>
+              <td><span class="swatch" style="background:#ebd3a5"></span>Cream & Coklat</td>
+            </tr>
+            <tr data-part="Kaki Belakang" data-primitive="Hyperboloid">
+              <td>Kaki Belakang (2x)</td>
+              <td>Hyperboloid (1 sheet)</td>
+              <td>Paha & betis melengkung hiperboloid, panjang 20cm</td>
+              <td><span class="swatch" style="background:#ebd3a5"></span>Cream & Coklat</td>
+            </tr>
+            <tr data-part="Leg Leaves" data-primitive="Ellipsoid">
+              <td>Leg Leaves (4x)</td>
+              <td>Ellipsoid pipih</td>
+              <td>Tunas daun mencuat di siku & tumit kaki, 8cm</td>
+              <td><span class="swatch" style="background:#5ec488"></span>Hijau Daun</td>
+            </tr>
+            <tr data-part="Paw" data-primitive="Ellipsoid">
+              <td>Paw (4x)</td>
+              <td>Ellipsoid + Sphere</td>
+              <td>Telapak kaki coklat tua + jari, Ø 6cm</td>
+              <td><span class="swatch" style="background:#6d4527"></span>Coklat Tua</td>
+            </tr>
+            <tr data-part="Ekor" data-primitive="Hyperboloid">
+              <td>Pangkal Ekor</td>
+              <td>Hyperboloid (1 sheet)</td>
+              <td>Tangkai ekor melengkung, panjang 22cm</td>
+              <td><span class="swatch" style="background:#ebd3a5"></span>Cream / Hijau Muda</td>
+            </tr>
+            <tr data-part="Tail Leaf" data-primitive="Ellipsoid">
+              <td>Tail Leaf</td>
+              <td>Ellipsoid pipih besar</td>
+              <td>Daun ekor lebar berlekuk tajam, panjang 28cm</td>
+              <td><span class="swatch" style="background:#5ec488"></span>Hijau Daun Mint</td>
+            </tr>
+            <tr data-part="Detail Tail Leaf" data-primitive="Curve">
+              <td>Detail Tail Leaf</td>
+              <td>Curve (Tube)</td>
+              <td>Batang tengah & cabang urat daun ekor</td>
+              <td><span class="swatch" style="background:#266b44"></span>Hijau Gelap</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="margin-top: 12px">
+          <b>Objek Quadric & Kurva Terpakai:</b>
+          <ul class="list">
+            <li>✔ <span class="tag">Sphere</span> (pupil, highlight mata, detail jari paw)</li>
+            <li>
+              ✔ <span class="tag">Ellipsoid</span> (kepala, moncong, hidung,
+              mata, telinga leaf, head leaf, badan, dada, daun dada/bahu/kaki,
+              paw, tail leaf, batu & semak diorama)
+            </li>
+            <li>✔ <span class="tag">Cylinder</span> (kaki depan, batang pohon & podium diorama)</li>
+            <li>
+              ✔ <span class="tag">Hyperboloid of One Sheet</span> (leher, kaki
+              belakang, pangkal ekor)
+            </li>
+            <li>
+              ✔ <span class="tag">CatmullRomCurve3 + TubeGeometry</span> (urat daun telinga, lekuk jambul kepala, urat daun ekor)
+            </li>
+          </ul>
+          <p class="foot">
+            Tips: Klik bagian pada model 3D atau baris pada tabel untuk menyorot komponen. Gunakan slider <code>Explode</code> untuk memisahkan bagian objek Quadric.
+          </p>
+        </div>
+      </aside>
+    </div>
+
+    <!-- THREE.JS MODULES -->
+    <script type="module">
+      import * as THREE from 'three';
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+      import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+      // === SCENE BASICS ===
+      const canvas = document.getElementById('canvas');
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        preserveDrawingBuffer: true
+      });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.08;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0b1f17);
+      scene.fog = new THREE.FogExp2(0x0b1f17, 0.065);
+
+      const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
+      camera.position.set(2.5, 1.55, 3.1);
+      scene.add(camera);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.target.set(0, 0.48, 0);
+      controls.maxPolarAngle = Math.PI * 0.49;
+      controls.minDistance = 0.9;
+      controls.maxDistance = 12;
+
+      // === STUDIO LIGHTS (Mood Switchable) ===
+      const ambLight = new THREE.AmbientLight(0xdfffe9, 0.65);
+      scene.add(ambLight);
+
+      const dirLight = new THREE.DirectionalLight(0xfff6dd, 1.35);
+      dirLight.position.set(4.5, 6.5, 3.5);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.set(2048, 2048);
+      dirLight.shadow.camera.near = 0.5;
+      dirLight.shadow.camera.far = 20;
+      const d = 3.2;
+      dirLight.shadow.camera.left = -d;
+      dirLight.shadow.camera.right = d;
+      dirLight.shadow.camera.top = d;
+      dirLight.shadow.camera.bottom = -d;
+      dirLight.shadow.bias = -0.0005;
+      scene.add(dirLight);
+
+      const rimLight = new THREE.PointLight(0x68d89b, 1.1, 16);
+      rimLight.position.set(-3.2, 2.2, -2.5);
+      scene.add(rimLight);
+
+      const fillLight = new THREE.PointLight(0xffe0a3, 0.45, 12);
+      fillLight.position.set(2.0, 0.8, -2.5);
+      scene.add(fillLight);
+
+      // === MATERIALS (Leafeon Authentic Palette from GAMBAR.jpeg) ===
+      const COLORS = {
+        creamBody: 0xebd3a5,
+        creamLight: 0xf6e7c8,
+        leafMint: 0x68d093,
+        leafGreen: 0x4eb87a,
+        deepGreen: 0x266b44,
+        pawBrown: 0x6d4527,
+        earInner: 0x7b4c29,
+        eyeAmber: 0x9c5a25,
+        black: 0x18100b,
+        white: 0xffffff,
+        soil: 0x3b281c,
+        grassTop: 0x235337,
+        grassRim: 0x316e49,
+        rock: 0x566960
+      };
+
+      function m(color, opts = {}) {
+        return new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.72,
+          metalness: 0.02,
+          ...opts
+        });
+      }
+
+      // === Gambar 2D di dalam Viewer (billboard) / Background ===
+      let imgBillboard = null;
+      let lastTexture = null;
+      const imgState = { visible: true, opacity: 1.0, scale: 1.8 };
+
+      // Axes helper (toggle via GUI)
+      const axes = new THREE.AxesHelper(1.5);
+      axes.visible = false;
+      scene.add(axes);
+
+      // === GEOMETRY HELPERS ===
+      function ellipsoid(rx, ry, rz, wSeg=24, hSeg=16){
+        const g = new THREE.SphereGeometry(1, wSeg, hSeg);
+        g.scale(rx, ry, rz);
+        return g;
+      }
+
+      function cylinder(h, rTop, rBottom=rTop, radialSeg=24){
+        return new THREE.CylinderGeometry(rTop, rBottom, h, radialSeg, 1, false);
+      }
+
+      // Hyperboloid of one sheet using parametric surface
+      function hyperboloidOneSheet({a=0.08, b=0.08, c=0.08, height=0.35, radialSeg=48, heightSeg=48}){
+        // z = c * sinh(v), x = a * cosh(v) * cos(u), y = b * cosh(v) * sin(u)
+        const vMax = Math.asinh((height/2)/c);
+        const uSeg = radialSeg, vSeg = heightSeg;
+        const positions = [], normals = [], uvs = [], indices = [];
+        for(let j=0;j<=vSeg;j++){
+          const v = -vMax + (j/vSeg)*(2*vMax);
+          const cosh = Math.cosh(v), sinh = Math.sinh(v);
+          for(let i=0;i<=uSeg;i++){
+            const u = (i/uSeg)*Math.PI*2;
+            const cu = Math.cos(u), su = Math.sin(u);
+            const x = a * cosh * cu;
+            const y = b * cosh * su;
+            const z = c * sinh;
+            positions.push(x,y,z);
+            // normal from implicit gradient ∇F = (2x/a^2, 2y/b^2, -2z/c^2)
+            const nx = (2*x)/(a*a), ny=(2*y)/(b*b), nz=(-2*z)/(c*c);
+            const n = new THREE.Vector3(nx,ny,nz).normalize();
+            normals.push(n.x,n.y,n.z);
+            uvs.push(i/uSeg, j/vSeg);
+          }
+        }
+        for(let j=0;j<vSeg;j++){
+          for(let i=0;i<uSeg;i++){
+            const a0 = j*(uSeg+1)+i;
+            const a1 = a0+1;
+            const b0 = (j+1)*(uSeg+1)+i;
+            const b1 = b0+1;
+            indices.push(a0,b0,a1, a1,b0,b1);
+          }
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+        g.setAttribute('normal', new THREE.Float32BufferAttribute(normals,3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs,2));
+        g.setIndex(indices);
+        return g;
+      }
+
+      function tubeFromPoints(points, r=0.004, radialSeg=8){
+        const curve = new THREE.CatmullRomCurve3(points);
+        return new THREE.TubeGeometry(curve, 64, r, radialSeg, false);
+      }
+
+      // === FOREST DIORAMA & PARTICLE SYSTEM ===
+      const envGroup = new THREE.Group();
+      scene.add(envGroup);
+
+      const soilBase = new THREE.Mesh(cylinder(0.18, 1.85, 1.62, 48), m(COLORS.soil, { roughness: 0.95 }));
+      soilBase.position.y = -0.10;
+      soilBase.receiveShadow = true;
+      envGroup.add(soilBase);
+
+      const grassTop = new THREE.Mesh(cylinder(0.06, 1.92, 1.86, 48), m(COLORS.grassTop, { roughness: 0.9 }));
+      grassTop.position.y = -0.01;
+      grassTop.receiveShadow = true;
+      envGroup.add(grassTop);
+
+      const innerGrass = new THREE.Mesh(ellipsoid(1.55, 0.04, 1.55, 36, 16), m(COLORS.grassRim, { roughness: 0.88 }));
+      innerGrass.position.y = 0.01;
+      innerGrass.receiveShadow = true;
+      envGroup.add(innerGrass);
+
+      const rockConfigs = [
+        { pos: [-1.15, 0.08, -0.65], s: [0.22, 0.14, 0.18], r: 0.4 },
+        { pos: [-0.95, 0.05, -0.82], s: [0.13, 0.09, 0.12], r: -0.3 },
+        { pos: [1.10, 0.07, -0.75], s: [0.18, 0.12, 0.15], r: 1.1 },
+        { pos: [-0.85, 0.06, 0.95], s: [0.16, 0.10, 0.14], r: 0.8 }
+      ];
+      rockConfigs.forEach(rc => {
+        const rock = new THREE.Mesh(ellipsoid(rc.s[0], rc.s[1], rc.s[2], 14, 10), m(COLORS.rock, { roughness: 0.92 }));
+        rock.position.set(...rc.pos);
+        rock.rotation.y = rc.r;
+        rock.castShadow = true;
+        rock.receiveShadow = true;
+        envGroup.add(rock);
+      });
+
+      const bushPositions = [
+        [-1.05, 0.06, 0.55], [0.95, 0.06, 0.82], [-0.45, 0.05, -1.25], [0.55, 0.06, -1.15]
+      ];
+      bushPositions.forEach(([bx, by, bz], idx) => {
+        for (let k = -1; k <= 1; k++) {
+          const blade = new THREE.Mesh(ellipsoid(0.04, 0.14, 0.025, 12, 8), m(idx % 2 ? COLORS.leafMint : COLORS.leafGreen));
+          blade.position.set(bx + k * 0.05, by + 0.04, bz);
+          blade.rotation.z = k * 0.32;
+          blade.castShadow = true;
+          envGroup.add(blade);
+        }
+      });
+
+      const PARTICLE_COUNT = 75;
+      const pGeo = new THREE.BufferGeometry();
+      const pPos = new Float32Array(PARTICLE_COUNT * 3);
+      const pSpeeds = [];
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const rad = 0.35 + Math.random() * 1.65;
+        pPos[i * 3] = Math.cos(angle) * rad;
+        pPos[i * 3 + 1] = 0.15 + Math.random() * 1.65;
+        pPos[i * 3 + 2] = Math.sin(angle) * rad;
+        pSpeeds.push({
+          angle,
+          rad,
+          ySpeed: 0.002 + Math.random() * 0.003,
+          rotSpeed: 0.006 + Math.random() * 0.012
+        });
+      }
+      pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+      const pMat = new THREE.PointsMaterial({ color: 0xa8ffcb, size: 0.045, transparent: true, opacity: 0.82 });
+      const particles = new THREE.Points(pGeo, pMat);
+      envGroup.add(particles);
+
+      // === MODEL BUILDER (Authentic #470 Leafeon) ===
+      const model = new THREE.Group();
+      model.position.set(0, 0.19, 0);
+      scene.add(model);
+
+      const toggles = {
+        axes: false, wire: false, autoRotate: false, env: true,
+        head: true, ears: true, body: true, frontLegs: true,
+        backLegs: true, tail: true, leaves: true, eyes: true
+      };
+
+      const interactiveMeshes = [];
+      const explodeTargets = [];
+
+      function add(mesh, group, partName, primitiveType) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.material = mesh.material.clone();
+        mesh.userData.part = partName;
+        mesh.userData.primitive = primitiveType;
+        group.add(mesh);
+        interactiveMeshes.push(mesh);
+        return mesh;
+      }
+
+      function registerExplode(obj, dirVec) {
+        obj.userData.basePos = obj.position.clone();
+        obj.userData.explodeDir = dirVec.clone();
+        explodeTargets.push(obj);
+      }
+
+      // 1. BODY & NECK
+      const body = new THREE.Group();
+      const torsoMesh = add(new THREE.Mesh(ellipsoid(0.30, 0.145, 0.155, 32, 20), m(COLORS.creamBody)), body, 'Badan', 'Ellipsoid');
+      torsoMesh.position.set(-0.02, 0.36, 0);
+      torsoMesh.rotation.z = 0.05;
+
+      const chestMesh = add(new THREE.Mesh(ellipsoid(0.15, 0.125, 0.135, 28, 18), m(COLORS.creamLight)), body, 'Dada', 'Ellipsoid');
+      chestMesh.position.set(0.16, 0.38, 0);
+
+      const neckMesh = add(
+        new THREE.Mesh(hyperboloidOneSheet({ a: 0.068, b: 0.068, c: 0.14, height: 0.22 }), m(COLORS.creamBody)),
+        body, 'Leher', 'Hyperboloid'
+      );
+      neckMesh.position.set(0.24, 0.48, 0);
+      neckMesh.rotation.x = Math.PI / 2;
+      neckMesh.rotation.z = -0.45;
+      model.add(body);
+      registerExplode(body, new THREE.Vector3(0, 0.05, 0));
+
+      // 2. HEAD, SNOUT, NOSE, EYES & EARS
+      const head = new THREE.Group();
+      head.position.set(0.33, 0.60, 0);
+
+      add(new THREE.Mesh(ellipsoid(0.155, 0.13, 0.135, 32, 24), m(COLORS.creamBody)), head, 'Kepala', 'Ellipsoid');
+      const cheekL = add(new THREE.Mesh(ellipsoid(0.065, 0.045, 0.05, 18, 12), m(COLORS.creamLight)), head, 'Kepala', 'Ellipsoid');
+      cheekL.position.set(0.03, -0.04, 0.105);
+      const cheekR = add(cheekL.clone(), head, 'Kepala', 'Ellipsoid');
+      cheekR.position.z *= -1;
+
+      const snout = add(new THREE.Mesh(ellipsoid(0.065, 0.042, 0.052, 24, 16), m(COLORS.creamLight)), head, 'Moncong', 'Ellipsoid');
+      snout.position.set(0.135, -0.032, 0);
+      snout.rotation.z = -0.12;
+
+      const nose = add(new THREE.Mesh(ellipsoid(0.016, 0.011, 0.018, 16, 12), m(COLORS.pawBrown, { roughness: 0.4 })), head, 'Hidung', 'Ellipsoid');
+      nose.position.set(0.195, -0.022, 0);
+
+      const eyeGroup = new THREE.Group();
+      const eyeL = add(new THREE.Mesh(ellipsoid(0.042, 0.034, 0.022, 24, 16), m(COLORS.eyeAmber, { roughness: 0.25 })), eyeGroup, 'Mata', 'Ellipsoid');
+      eyeL.position.set(0.108, 0.008, 0.088);
+      eyeL.rotation.y = 0.42;
+      eyeL.rotation.z = -0.12;
+      const eyeR = add(eyeL.clone(), eyeGroup, 'Mata', 'Ellipsoid');
+      eyeR.position.z *= -1;
+      eyeR.rotation.y = -0.42;
+
+      const pupilL = add(new THREE.Mesh(new THREE.SphereGeometry(0.015, 16, 12), m(COLORS.black, { roughness: 0.15 })), eyeGroup, 'Pupil', 'Sphere');
+      pupilL.position.set(0.136, 0.008, 0.098);
+      const pupilR = add(pupilL.clone(), eyeGroup, 'Pupil', 'Sphere');
+      pupilR.position.z *= -1;
+
+      const hiL = add(new THREE.Mesh(new THREE.SphereGeometry(0.007, 12, 10), m(COLORS.white, { emissive: 0xffffff, emissiveIntensity: 0.35 })), eyeGroup, 'Highlight Mata', 'Sphere');
+      hiL.position.set(0.144, 0.020, 0.102);
+      const hiR = add(hiL.clone(), eyeGroup, 'Highlight Mata', 'Sphere');
+      hiR.position.z *= -1;
+      head.add(eyeGroup);
+
+      const ears = new THREE.Group();
+      function makeEar(sign = 1) {
+        const eg = new THREE.Group();
+        const blade = add(new THREE.Mesh(ellipsoid(0.21, 0.018, 0.068, 28, 16), m(COLORS.leafGreen)), eg, 'Telinga Leaf', 'Ellipsoid');
+        blade.position.set(-0.04, 0.21, 0.12 * sign);
+        blade.rotation.set(0.28 * sign, -0.25 * sign, 1.05);
+
+        const inner = add(new THREE.Mesh(ellipsoid(0.12, 0.012, 0.036, 20, 12), m(COLORS.earInner)), eg, 'Telinga Leaf', 'Ellipsoid');
+        inner.position.set(-0.02, 0.16, 0.112 * sign);
+        inner.rotation.copy(blade.rotation);
+
+        const tipNotch = add(new THREE.Mesh(ellipsoid(0.06, 0.014, 0.028, 16, 10), m(COLORS.leafMint)), eg, 'Telinga Leaf', 'Ellipsoid');
+        tipNotch.position.set(-0.09, 0.32, 0.155 * sign);
+        tipNotch.rotation.copy(blade.rotation);
+
+        const vGeo = tubeFromPoints([
+          new THREE.Vector3(0.01, 0.09, 0.075 * sign),
+          new THREE.Vector3(-0.04, 0.21, 0.125 * sign),
+          new THREE.Vector3(-0.11, 0.36, 0.175 * sign)
+        ], 0.0035);
+        add(new THREE.Mesh(vGeo, m(COLORS.deepGreen)), eg, 'Detail Telinga', 'Curve');
+        return eg;
+      }
+      ears.add(makeEar(1));
+      ears.add(makeEar(-1));
+      head.add(ears);
+
+      const headLeaf = new THREE.Group();
+      headLeaf.position.set(0.08, 0.11, 0);
+      const hlMain = add(new THREE.Mesh(ellipsoid(0.145, 0.022, 0.055, 28, 14), m(COLORS.leafMint)), headLeaf, 'Head Leaf', 'Ellipsoid');
+      hlMain.position.set(0.02, 0.09, 0);
+      hlMain.rotation.z = 1.18;
+      const hlCurl = add(new THREE.Mesh(ellipsoid(0.085, 0.018, 0.042, 20, 12), m(COLORS.leafGreen)), headLeaf, 'Head Leaf', 'Ellipsoid');
+      hlCurl.position.set(-0.02, 0.20, 0);
+      hlCurl.rotation.z = 2.15;
+      add(
+        new THREE.Mesh(
+          tubeFromPoints([
+            new THREE.Vector3(0.02, 0.0, 0),
+            new THREE.Vector3(0.04, 0.11, 0),
+            new THREE.Vector3(-0.04, 0.22, 0)
+          ], 0.0032),
+          m(COLORS.deepGreen)
+        ),
+        headLeaf, 'Head Leaf', 'Curve'
+      );
+      head.add(headLeaf);
+
+      model.add(head);
+      registerExplode(head, new THREE.Vector3(0.32, 0.28, 0));
+
+      // 3. FRONT LEGS (Cylinders + Dark Brown Sock & Paw + Toe Spheres)
+      const front = new THREE.Group();
+      const frontLegGroups = [];
+      function makeFrontLeg(z = 0.095) {
+        const g = new THREE.Group();
+        const upper = add(new THREE.Mesh(cylinder(0.25, 0.048, 0.040, 24), m(COLORS.creamBody)), g, 'Kaki Depan', 'Cylinder');
+        upper.position.set(0, -0.12, 0);
+
+        const sock = add(new THREE.Mesh(cylinder(0.12, 0.040, 0.036, 24), m(COLORS.pawBrown)), g, 'Kaki Depan', 'Cylinder');
+        sock.position.set(0, -0.29, 0);
+
+        const paw = add(new THREE.Mesh(ellipsoid(0.058, 0.026, 0.046, 20, 14), m(COLORS.pawBrown)), g, 'Paw', 'Ellipsoid');
+        paw.position.set(0.015, -0.355, 0);
+
+        for (let t = -1; t <= 1; t++) {
+          const toe = add(new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 10), m(COLORS.pawBrown)), g, 'Paw', 'Sphere');
+          toe.position.set(0.062, -0.362, t * 0.015);
+        }
+
+        g.position.set(0.16, 0.37, z);
+        frontLegGroups.push(g);
+        return g;
+      }
+      front.add(makeFrontLeg(+0.095));
+      front.add(makeFrontLeg(-0.095));
+      model.add(front);
+      registerExplode(front, new THREE.Vector3(0.22, -0.22, 0));
+
+      // 4. BACK LEGS (Hyperboloid of One Sheet + Dark Brown Sock & Paw)
+      const back = new THREE.Group();
+      const backLegGroups = [];
+      function makeBackLeg(z = 0.105) {
+        const g = new THREE.Group();
+        const thigh = add(new THREE.Mesh(ellipsoid(0.095, 0.11, 0.068, 22, 16), m(COLORS.creamBody)), g, 'Kaki Belakang', 'Ellipsoid');
+        thigh.position.set(-0.01, -0.02, 0);
+        thigh.rotation.z = 0.25;
+
+        const hyper = add(
+          new THREE.Mesh(hyperboloidOneSheet({ a: 0.036, b: 0.036, c: 0.09, height: 0.28 }), m(COLORS.creamBody)),
+          g, 'Kaki Belakang', 'Hyperboloid'
+        );
+        hyper.rotation.x = Math.PI / 2;
+        hyper.position.set(-0.02, -0.17, 0);
+
+        const sock = add(new THREE.Mesh(cylinder(0.10, 0.038, 0.034, 22), m(COLORS.pawBrown)), g, 'Kaki Belakang', 'Cylinder');
+        sock.position.set(-0.02, -0.30, 0);
+
+        const paw = add(new THREE.Mesh(ellipsoid(0.058, 0.026, 0.046, 20, 14), m(COLORS.pawBrown)), g, 'Paw', 'Ellipsoid');
+        paw.position.set(-0.005, -0.355, 0);
+
+        for (let t = -1; t <= 1; t++) {
+          const toe = add(new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 10), m(COLORS.pawBrown)), g, 'Paw', 'Sphere');
+          toe.position.set(0.042, -0.362, t * 0.015);
+        }
+
+        g.position.set(-0.19, 0.37, z);
+        backLegGroups.push(g);
+        return g;
+      }
+      back.add(makeBackLeg(+0.105));
+      back.add(makeBackLeg(-0.105));
+      model.add(back);
+      registerExplode(back, new THREE.Vector3(-0.22, -0.22, 0));
+
+      // 5. CHEST, SHOULDER & LEG LEAVES (Signature Leafeon Foliage)
+      const leaves = new THREE.Group();
+      function leafMesh(p, rot, s = 1, color = COLORS.leafMint, partName = 'Shoulder Leaves') {
+        const mesh = add(new THREE.Mesh(ellipsoid(0.085 * s, 0.016 * s, 0.038 * s, 20, 12), m(color)), leaves, partName, 'Ellipsoid');
+        mesh.position.copy(p);
+        mesh.rotation.set(rot.x, rot.y, rot.z);
+        return mesh;
+      }
+      leafMesh(new THREE.Vector3(0.28, 0.36, 0), new THREE.Euler(0, 0, -0.45), 1.15, COLORS.leafMint, 'Shoulder Leaves');
+      leafMesh(new THREE.Vector3(0.12, 0.51, 0), new THREE.Euler(0, 0, 0.55), 0.95, COLORS.leafGreen, 'Shoulder Leaves');
+      leafMesh(new THREE.Vector3(0.12, 0.44, 0.13), new THREE.Euler(0.25, 0.2, 0.35), 0.9, COLORS.leafMint, 'Shoulder Leaves');
+      leafMesh(new THREE.Vector3(0.12, 0.44, -0.13), new THREE.Euler(-0.25, -0.2, 0.35), 0.9, COLORS.leafMint, 'Shoulder Leaves');
+      leafMesh(new THREE.Vector3(0.13, 0.18, 0.12), new THREE.Euler(0.15, 0.1, 2.5), 0.75, COLORS.leafGreen, 'Leg Leaves');
+      leafMesh(new THREE.Vector3(0.13, 0.18, -0.12), new THREE.Euler(-0.15, -0.1, 2.5), 0.75, COLORS.leafGreen, 'Leg Leaves');
+      leafMesh(new THREE.Vector3(-0.25, 0.19, 0.13), new THREE.Euler(0.15, -0.1, 2.6), 0.78, COLORS.leafGreen, 'Leg Leaves');
+      leafMesh(new THREE.Vector3(-0.25, 0.19, -0.13), new THREE.Euler(-0.15, 0.1, 2.6), 0.78, COLORS.leafGreen, 'Leg Leaves');
+      model.add(leaves);
+      registerExplode(leaves, new THREE.Vector3(0, 0.32, 0));
+
+      // 6. TAIL (Hyperboloid Stem + Large Serrated Leaf Blade + Veins)
+      const tail = new THREE.Group();
+      tail.position.set(-0.28, 0.44, 0);
+
+      const tailBase = add(
+        new THREE.Mesh(hyperboloidOneSheet({ a: 0.032, b: 0.032, c: 0.09, height: 0.26 }), m(COLORS.creamBody)),
+        tail, 'Ekor', 'Hyperboloid'
+      );
+      tailBase.rotation.z = Math.PI / 2 - 0.55;
+      tailBase.position.set(-0.08, 0.05, 0);
+
+      const tailLeaf = new THREE.Group();
+      tailLeaf.position.set(-0.26, 0.22, 0);
+      tailLeaf.rotation.z = -0.52;
+
+      add(new THREE.Mesh(ellipsoid(0.28, 0.024, 0.125, 32, 18), m(COLORS.leafMint)), tailLeaf, 'Tail Leaf', 'Ellipsoid');
+      const tlLobe1 = add(new THREE.Mesh(ellipsoid(0.14, 0.020, 0.065, 20, 12), m(COLORS.leafGreen)), tailLeaf, 'Tail Leaf', 'Ellipsoid');
+      tlLobe1.position.set(-0.06, 0.002, 0.075);
+      tlLobe1.rotation.y = 0.35;
+      const tlLobe2 = add(new THREE.Mesh(ellipsoid(0.14, 0.020, 0.065, 20, 12), m(COLORS.leafGreen)), tailLeaf, 'Tail Leaf', 'Ellipsoid');
+      tlLobe2.position.set(0.04, 0.002, -0.075);
+      tlLobe2.rotation.y = -0.35;
+
+      add(
+        new THREE.Mesh(
+          tubeFromPoints([
+            new THREE.Vector3(0.22, 0.015, 0),
+            new THREE.Vector3(0.0, 0.022, 0.01),
+            new THREE.Vector3(-0.25, 0.012, 0)
+          ], 0.0045),
+          m(COLORS.deepGreen)
+        ),
+        tailLeaf, 'Detail Tail Leaf', 'Curve'
+      );
+      add(
+        new THREE.Mesh(
+          tubeFromPoints([
+            new THREE.Vector3(0.05, 0.020, 0),
+            new THREE.Vector3(-0.05, 0.018, 0.08)
+          ], 0.003),
+          m(COLORS.deepGreen)
+        ),
+        tailLeaf, 'Detail Tail Leaf', 'Curve'
+      );
+      add(
+        new THREE.Mesh(
+          tubeFromPoints([
+            new THREE.Vector3(-0.02, 0.020, 0),
+            new THREE.Vector3(-0.12, 0.018, -0.075)
+          ], 0.003),
+          m(COLORS.deepGreen)
+        ),
+        tailLeaf, 'Detail Tail Leaf', 'Curve'
+      );
+      tail.add(tailLeaf);
+      model.add(tail);
+      registerExplode(tail, new THREE.Vector3(-0.38, 0.22, 0));
+
+      // === GUI ===
+      const gui = new GUI({ title: 'Kontrol Bagian 3D' });
+      const f1 = gui.addFolder('Visibilitas Komponen');
+      f1.add(toggles, 'axes').name('Tampilkan Axes').onChange(v => (axes.visible = v));
+      f1.add(toggles, 'wire').name('Wireframe').onChange(v => setWireframe(v));
+      f1.add(toggles, 'autoRotate').name('Auto-rotate');
+      f1.add(toggles, 'env').name('Diorama Hutan').onChange(v => (envGroup.visible = v));
+      f1.add(toggles, 'head').name('Kepala').onChange(v => (head.visible = v));
+      f1.add(toggles, 'ears').name('Telinga & Head Leaf').onChange(v => (ears.visible = headLeaf.visible = v));
+      f1.add(toggles, 'eyes').name('Mata').onChange(v => (eyeGroup.visible = v));
+      f1.add(toggles, 'body').name('Badan & Leher').onChange(v => (body.visible = v));
+      f1.add(toggles, 'frontLegs').name('Kaki Depan').onChange(v => (front.visible = v));
+      f1.add(toggles, 'backLegs').name('Kaki Belakang').onChange(v => (back.visible = v));
+      f1.add(toggles, 'tail').name('Ekor').onChange(v => (tail.visible = v));
+      f1.add(toggles, 'leaves').name('Daun Tubuh').onChange(v => (leaves.visible = v));
+      f1.close();
+
+      const fImg = gui.addFolder('Gambar 3D (Billboard)');
+      fImg.add({ Pilih_File: () => document.getElementById('imgFile').click() }, 'Pilih_File');
+      fImg.add(imgState, 'visible').name('Tampilkan').onChange(v => { if (imgBillboard) imgBillboard.visible = v; });
+      fImg.add(imgState, 'opacity', 0.2, 1.0, 0.01).name('Opacity').onChange(v => { if (imgBillboard) imgBillboard.material.opacity = v; });
+      fImg.add(imgState, 'scale', 0.6, 3.0, 0.05).name('Skala').onChange(v => {
+        if (imgBillboard) {
+          const a = imgBillboard.userData.aspect || 1;
+          imgBillboard.scale.set(v, v / a, 1);
+        }
+      });
+      fImg.close();
+
+      function setWireframe(state) {
+        scene.traverse(o => { if (o.isMesh) o.material.wireframe = state; });
+        document.getElementById('toggleWire').classList.toggle('active', state);
+      }
+
+      // === 2-WAY INTERACTIVE RAYCASTING & TABLE HIGHLIGHT ===
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      const tableRows = Array.from(document.querySelectorAll('#specTable tbody tr'));
+      const inspTitle = document.getElementById('inspTitle');
+      const inspMeta = document.getElementById('inspMeta');
+      let lockedPart = null;
+
+      function highlightPart(partName, scrollTable = false) {
+        interactiveMeshes.forEach(mesh => {
+          const match = partName && mesh.userData.part === partName;
+          mesh.material.emissive.setHex(match ? 0x267347 : 0x000000);
+          mesh.material.emissiveIntensity = match ? 0.55 : 0;
+        });
+        tableRows.forEach(tr => {
+          const isMatch = partName && tr.dataset.part === partName;
+          tr.classList.toggle('active-row', Boolean(isMatch));
+          if (isMatch && scrollTable) tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+        if (partName) {
+          const row = tableRows.find(r => r.dataset.part === partName);
+          const prim = row ? row.children[1].textContent : 'Quadric';
+          const desc = row ? row.children[2].textContent : '';
+          inspTitle.textContent = `${partName} (${prim})`;
+          inspMeta.textContent = desc;
+        } else {
+          inspTitle.textContent = 'Klik / Hover Bagian 3D';
+          inspMeta.textContent = 'Pilih bagian pada model 3D atau klik baris tabel untuk inspeksi objek Quadric.';
+        }
+      }
+
+      canvas.addEventListener('pointermove', e => {
+        if (lockedPart) return;
+        const rect = canvas.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(interactiveMeshes, false);
+        highlightPart(hits.length > 0 ? hits[0].object.userData.part : null, false);
+      });
+
+      canvas.addEventListener('click', e => {
+        const rect = canvas.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(interactiveMeshes, false);
+        if (hits.length > 0) {
+          const clickedPart = hits[0].object.userData.part;
+          lockedPart = lockedPart === clickedPart ? null : clickedPart;
+          highlightPart(lockedPart, true);
+        } else {
+          lockedPart = null;
+          highlightPart(null, false);
+        }
+      });
+
+      tableRows.forEach(tr => {
+        tr.addEventListener('click', () => {
+          const part = tr.dataset.part;
+          lockedPart = lockedPart === part ? null : part;
+          highlightPart(lockedPart, false);
+        });
+      });
+
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const filter = btn.dataset.filter;
+          tableRows.forEach(tr => {
+            tr.classList.toggle('hidden-row', !(filter === 'all' || tr.dataset.primitive === filter));
+          });
+          interactiveMeshes.forEach(mesh => {
+            const match = filter === 'all' || mesh.userData.primitive === filter;
+            mesh.material.transparent = !match;
+            mesh.material.opacity = match ? 1.0 : 0.14;
+          });
+        });
+      });
+
+      // === CAMERA PRESETS, ANIMATION, LIGHTING & TOOLBAR BUTTONS ===
+      const camTargetGoal = new THREE.Vector3(0, 0.48, 0);
+      let camPosGoal = null;
+      function flyCamera(pos, target) {
+        camPosGoal = new THREE.Vector3(...pos);
+        camTargetGoal.set(...target);
+      }
+
+      document.getElementById('resetCam').onclick = () => flyCamera([2.5, 1.55, 3.1], [0, 0.48, 0]);
+      document.querySelectorAll('.cam-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const mode = btn.dataset.cam;
+          if (mode === 'front') flyCamera([2.6, 0.85, 0.0], [0, 0.48, 0]);
+          if (mode === 'side') flyCamera([0.0, 0.85, 2.9], [0, 0.48, 0]);
+          if (mode === 'top') flyCamera([0.2, 3.6, 0.4], [0, 0.35, 0]);
+          if (mode === 'head') flyCamera([1.25, 0.92, 0.85], [0.32, 0.62, 0]);
+        });
+      });
+
+      let currentAnim = 'idle';
+      document.querySelectorAll('.anim-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.anim-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          currentAnim = btn.dataset.anim;
+        });
+      });
+
+      document.querySelectorAll('.light-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.light-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const mode = btn.dataset.light;
+          const moodEl = document.getElementById('moodStat');
+          if (mode === 'day') {
+            scene.background = lastTexture || new THREE.Color(0x0b1f17);
+            scene.fog.color.setHex(0x0b1f17);
+            ambLight.color.setHex(0xdfffe9); ambLight.intensity = 0.65;
+            dirLight.color.setHex(0xfff6dd); dirLight.intensity = 1.35;
+            rimLight.color.setHex(0x68d89b); rimLight.intensity = 1.1;
+            moodEl.textContent = 'Forest Day';
+          } else if (mode === 'sunset') {
+            scene.background = lastTexture || new THREE.Color(0x241318);
+            scene.fog.color.setHex(0x241318);
+            ambLight.color.setHex(0xffcfb3); ambLight.intensity = 0.55;
+            dirLight.color.setHex(0xff8c42); dirLight.intensity = 1.55;
+            rimLight.color.setHex(0xffd166); rimLight.intensity = 1.25;
+            moodEl.textContent = 'Golden Sunset';
+          } else if (mode === 'night') {
+            scene.background = lastTexture || new THREE.Color(0x040b0e);
+            scene.fog.color.setHex(0x040b0e);
+            ambLight.color.setHex(0x4b778d); ambLight.intensity = 0.35;
+            dirLight.color.setHex(0x80bfff); dirLight.intensity = 0.55;
+            rimLight.color.setHex(0x52ffb8); rimLight.intensity = 2.2;
+            moodEl.textContent = 'Firefly Night';
+          }
+        });
+      });
+
+      document.getElementById('toggleSpin').onclick = e => {
+        toggles.autoRotate = !toggles.autoRotate;
+        e.currentTarget.classList.toggle('active', toggles.autoRotate);
+      };
+      document.getElementById('toggleWire').onclick = () => {
+        toggles.wire = !toggles.wire;
+        setWireframe(toggles.wire);
+      };
+      document.getElementById('toggleEnv').onclick = e => {
+        toggles.env = !toggles.env;
+        envGroup.visible = toggles.env;
+        e.currentTarget.classList.toggle('active', toggles.env);
+      };
+      document.getElementById('explodeSlider').addEventListener('input', e => {
+        const val = parseFloat(e.target.value);
+        explodeTargets.forEach(obj => {
+          obj.position.copy(obj.userData.basePos).addScaledVector(obj.userData.explodeDir, val);
+        });
+      });
+      document.getElementById('btnScreenshot').onclick = () => {
+        renderer.render(scene, camera);
+        const link = document.createElement('a');
+        link.download = 'Leafeon_470_ThreeJS.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      };
+
+      const imgFile = document.getElementById('imgFile');
+      imgFile.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        const loader = new THREE.TextureLoader();
+        loader.load(url, tex => {
+          URL.revokeObjectURL(url);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          lastTexture = tex;
+          scene.background = tex;
+          const aspect = tex.image && tex.image.width && tex.image.height ? tex.image.width / tex.image.height : 1;
+          if (imgBillboard) scene.remove(imgBillboard);
+          const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: imgState.opacity });
+          imgBillboard = new THREE.Sprite(mat);
+          imgBillboard.userData.aspect = aspect;
+          imgBillboard.scale.set(imgState.scale, imgState.scale / aspect, 1);
+          imgBillboard.position.set(1.4, 1.2, 0);
+          imgBillboard.visible = imgState.visible;
+          scene.add(imgBillboard);
+        });
+      });
+
+      function updateGeometryStats() {
+        let meshCount = 0, triCount = 0;
+        scene.traverse(o => {
+          if (o.isMesh && o.geometry) {
+            meshCount++;
+            const idx = o.geometry.index;
+            const pos = o.geometry.attributes.position;
+            triCount += idx ? idx.count / 3 : pos ? pos.count / 3 : 0;
+          }
+        });
+        document.getElementById('meshStat').textContent = meshCount;
+        document.getElementById('triStat').textContent = Math.round(triCount).toLocaleString('id-ID');
+      }
+      updateGeometryStats();
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        renderer.setSize(rect.width, rect.height, false);
+        camera.aspect = rect.width / rect.height;
+        camera.updateProjectionMatrix();
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      let t = 0, frames = 0, lastFpsTime = performance.now();
+      const fpsEl = document.getElementById('fpsStat');
+
+      function animate(now = performance.now()) {
+        requestAnimationFrame(animate);
+        frames++;
+        if (now - lastFpsTime >= 500) {
+          fpsEl.textContent = Math.round((frames * 1000) / (now - lastFpsTime));
+          frames = 0;
+          lastFpsTime = now;
+        }
+        if (camPosGoal) {
+          camera.position.lerp(camPosGoal, 0.08);
+          controls.target.lerp(camTargetGoal, 0.08);
+          if (camera.position.distanceTo(camPosGoal) < 0.02) camPosGoal = null;
+        }
+        if (toggles.autoRotate) model.rotation.y += 0.004;
+
+        t += 0.025;
+        const blink = Math.sin(t * 1.3) > 0.985 ? 0.12 : 1.0;
+        eyeGroup.scale.y = THREE.MathUtils.lerp(eyeGroup.scale.y, blink, 0.35);
+
+        if (currentAnim === 'idle') {
+          model.position.y = 0.19 + Math.sin(t * 1.4) * 0.008;
+          head.rotation.z = Math.sin(t * 1.1) * 0.03;
+          headLeaf.rotation.z = Math.sin(t * 1.8) * 0.05;
+          ears.rotation.x = Math.cos(t * 1.5) * 0.03;
+          tail.rotation.y = Math.sin(t * 1.3) * 0.12;
+          tailLeaf.rotation.z = -0.52 + Math.cos(t * 1.6) * 0.05;
+          frontLegGroups[0].rotation.z = 0; frontLegGroups[1].rotation.z = 0;
+          backLegGroups[0].rotation.z = 0; backLegGroups[1].rotation.z = 0;
+        } else if (currentAnim === 'walk') {
+          const w = t * 3.2;
+          model.position.y = 0.19 + Math.abs(Math.sin(w)) * 0.022;
+          frontLegGroups[0].rotation.z = Math.sin(w) * 0.32;
+          frontLegGroups[1].rotation.z = -Math.sin(w) * 0.32;
+          backLegGroups[0].rotation.z = -Math.sin(w) * 0.30;
+          backLegGroups[1].rotation.z = Math.sin(w) * 0.30;
+          head.rotation.z = Math.sin(w) * 0.05;
+          tail.rotation.y = Math.cos(w) * 0.22;
+        } else if (currentAnim === 'attack') {
+          const a = t * 4.5;
+          model.position.y = 0.24 + Math.sin(a) * 0.05;
+          head.rotation.z = 0.12 + Math.sin(a) * 0.08;
+          tail.rotation.y = Math.sin(a * 1.5) * 0.45;
+          tailLeaf.rotation.z = -0.35 + Math.cos(a * 1.5) * 0.2;
+        }
+
+        const posAttr = pGeo.attributes.position;
+        const stormMult = currentAnim === 'attack' ? 5.5 : 1.0;
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+          const sp = pSpeeds[i];
+          sp.angle += sp.rotSpeed * stormMult;
+          let py = posAttr.getY(i) + sp.ySpeed * stormMult;
+          if (py > 1.85) py = 0.12;
+          posAttr.setXYZ(i, Math.cos(sp.angle) * sp.rad, py, Math.sin(sp.angle) * sp.rad);
+        }
+        posAttr.needsUpdate = true;
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+    </script>
+  </body>
+</html>
